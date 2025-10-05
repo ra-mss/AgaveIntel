@@ -1,146 +1,182 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
-import { Provider as PaperProvider, Card, HelperText } from "react-native-paper";
+import { View, Text, StyleSheet, ActivityIndicator, Switch } from "react-native";
+import MapView, { UrlTile } from "react-native-maps";
 import { Picker } from "@react-native-picker/picker";
 import HeaderBar from "../components/HeaderBar";
 import colors from "../theme/colors";
+import { getAgaveMap } from "../api/bloomwatchApi";
 
 export default function MapScreen() {
-  const [year, setYear] = useState(2025);
-  const [agaveData, setAgaveData] = useState(null);
+  const [year, setYear] = useState(2024);
+  const [month, setMonth] = useState(4);
+  const [showNDVI, setShowNDVI] = useState(false);
+  const [urls, setUrls] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Simulación de consulta automática al cambiar año
-  const handleYearChange = async (selectedYear) => {
-    setYear(selectedYear);
-    setLoading(true);
+  const years = Array.from({ length: 2024 - 2017 + 1 }, (_, i) => 2017 + i);
+  const months = [
+    { label: "Enero", value: 1 },
+    { label: "Febrero", value: 2 },
+    { label: "Marzo", value: 3 },
+    { label: "Abril", value: 4 },
+    { label: "Mayo", value: 5 },
+    { label: "Junio", value: 6 },
+    { label: "Julio", value: 7 },
+    { label: "Agosto", value: 8 },
+    { label: "Septiembre", value: 9 },
+    { label: "Octubre", value: 10 },
+    { label: "Noviembre", value: 11 },
+    { label: "Diciembre", value: 12 },
+  ];
 
-    // Simula retardo de red (solo visual)
-    setTimeout(() => {
-      const simulatedData = {
-        area: Math.round(Math.random() * 10000),
-        prediction:
-          selectedYear > 2025
-            ? "🌿 Predicción de incremento moderado"
-            : "🌾 Datos históricos confirmados",
-      };
-      setAgaveData(simulatedData);
+  const fetchMap = async (selectedYear, selectedMonth) => {
+    setLoading(true);
+    try {
+      const data = await getAgaveMap(selectedYear, selectedMonth);
+      setUrls(data);
+    } catch (error) {
+      console.error("Error cargando el mapa:", error);
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
-  // Carga inicial automática
   useEffect(() => {
-    handleYearChange(year);
-  }, []);
-
-  const years = Array.from({ length: 31 }, (_, i) => 2000 + i);
+    fetchMap(year, month);
+  }, [year, month]);
 
   return (
-    <PaperProvider>
-      <View style={styles.container}>
-        <HeaderBar
-          title="🌵 BloomWatch Prototype"
-          subtitle="Fenología de agaves por año"
-        />
+    <View style={styles.container}>
+      {/* HEADER */}
+      <HeaderBar
+        title="🌵 BloomWatch"
+        subtitle="Fenología de agaves"
+        style={styles.header}
+      />
 
-        {/* Selector de año */}
-        <Card style={styles.card}>
-          <Text style={styles.label}>Selecciona un año:</Text>
+      {/* Controles compactos en una fila */}
+      <View style={styles.controlsRow}>
+        {/* Año */}
+        <View style={styles.control}>
+          <Text style={styles.label}>Año</Text>
           <Picker
             selectedValue={year}
-            onValueChange={handleYearChange}
+            onValueChange={setYear}
             style={styles.picker}
+            itemStyle={{ fontSize: 16 }}
           >
             {years.map((y) => (
               <Picker.Item key={y} label={y.toString()} value={y} />
             ))}
           </Picker>
-        </Card>
+        </View>
 
-        {/* Estado de carga */}
-        {loading && (
-          <ActivityIndicator size="large" color={colors.primaryDark} />
-        )}
+        {/* Mes */}
+        <View style={styles.control}>
+          <Text style={styles.label}>Mes</Text>
+          <Picker
+            selectedValue={month}
+            onValueChange={setMonth}
+            style={styles.picker}
+            itemStyle={{ fontSize: 16 }}
+          >
+            {months.map((m) => (
+              <Picker.Item key={m.value} label={m.label} value={m.value} />
+            ))}
+          </Picker>
+        </View>
 
-        {/* Resultados simulados */}
-        {!loading && agaveData && (
-          <Card style={styles.resultCard}>
-            <Text style={styles.resultTitle}>Datos para {year}</Text>
-            <HelperText type="info">
-              Cobertura vegetal estimada: {agaveData.area.toLocaleString()} ha
-            </HelperText>
-            <Text style={styles.prediction}>{agaveData.prediction}</Text>
-          </Card>
-        )}
-
-        {/* Placeholder para el mapa */}
-        <View style={styles.mapPlaceholder}>
-          <Text style={styles.mapText}>🗺️ </Text>
+        {/* Switch NDVI */}
+        <View style={[styles.control, { alignItems: "center" }]}>
+          <Text style={styles.label}>NDVI</Text>
+          <Switch
+            value={showNDVI}
+            onValueChange={setShowNDVI}
+            trackColor={{ false: "#ccc", true: colors.primary }}
+            thumbColor={showNDVI ? colors.primaryDark : "#fff"}
+          />
         </View>
       </View>
-    </PaperProvider>
+
+      {/* Loader */}
+      {loading && (
+        <ActivityIndicator size="large" color={colors.primaryDark} style={styles.loader} />
+      )}
+
+      {/* MAPA */}
+      <View style={styles.mapContainer}>
+        <MapView
+          style={styles.map}
+          initialRegion={{
+            latitude: 20.5,
+            longitude: -103.5,
+            latitudeDelta: 3,
+            longitudeDelta: 3,
+          }}
+        >
+          {showNDVI && urls?.ndvi_vigor && (
+            <UrlTile
+              urlTemplate={urls.ndvi_vigor}
+              zIndex={2}
+              maximumZ={19}
+              tileSize={256}
+            />
+          )}
+          {urls?.ndre_salud && (
+            <UrlTile
+              urlTemplate={urls.ndre_salud}
+              zIndex={1}
+              maximumZ={19}
+              tileSize={256}
+            />
+          )}
+        </MapView>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.background, 
+    paddingTop: 40,
+  },
+  header: {
+    marginBottom: 10,
+    paddingHorizontal: 20,
+  },
+  controlsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    marginHorizontal: 10,
+    marginBottom: 10,
+    paddingVertical: 12, // más altura para que no se corte
+    backgroundColor: "#f5f5f5",
+    borderRadius: 15,
+  },
+  control: {
     flex: 1,
-    backgroundColor: colors.background,
-    paddingTop: 80,
     alignItems: "center",
   },
-  card: {
-    width: "85%",
-    padding: 10,
-    marginBottom: 20,
-    borderRadius: 15,
-    backgroundColor: "white",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 5,
-    elevation: 3,
+  label: { 
+    fontSize: 16, 
+    color: colors.primaryDark, 
+    marginBottom: 4,
   },
-  label: {
-    fontSize: 16,
-    color: colors.primaryDark,
-  },
-  picker: {
+  picker: { 
     width: "100%",
-    marginTop: 10,
+    height: 50, // un poco más alto
   },
-  resultCard: {
-    width: "85%",
-    padding: 15,
+  mapContainer: { 
+    flex: 1, 
+    marginTop: 5, 
+  },
+  map: { 
+    flex: 1, 
+  },
+  loader: { 
     marginVertical: 10,
-    borderRadius: 15,
-    backgroundColor: colors.secondaryLight,
-  },
-  resultTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: colors.primaryDark,
-  },
-  prediction: {
-    fontSize: 16,
-    marginTop: 5,
-    color: colors.primaryDark,
-  },
-  mapPlaceholder: {
-    width: "85%",
-    height: 180,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderStyle: "dashed",
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 15,
-    marginTop: 20,
-    backgroundColor: "#F1F8E9",
-  },
-  mapText: {
-    color: colors.primary,
-    fontSize: 14,
   },
 });
